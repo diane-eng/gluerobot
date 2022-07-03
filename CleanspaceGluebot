@@ -1,0 +1,167 @@
+#!/usr/bin/env python
+
+import gtk
+import gobject
+import gladevcp.makepins
+from gladevcp.gladebuilder import GladeBuilder
+import hal
+import sys,os
+
+# set up paths to files
+BASE = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]), ".."))
+libdir = os.path.join(BASE, "lib", "python")
+sys.path.insert(0, libdir)
+datadir = os.path.join(BASE, "share", "linuxcnc")
+xmlname = os.path.join(datadir,"gui3.glade")
+
+import linuxcnc
+
+class CleanspaceGluebot(object):
+
+  def __init__(self):
+    self.emc = linuxcnc
+    self.error_channel = self.emc.error_channel()
+    self.status = self.emc.stat()
+    self.command = self.emc.command()
+    self.builder = gtk.Builder()
+    self.builder.add_from_file(xmlname)
+    self.halcomp = hal.component("CleanspaceGluebot")
+    self.builder.connect_signals(self)
+    self.window = self.builder.get_object("window1")
+    self.statusbar = self.builder.get_object("statusbar1")
+    self.window.show()
+    self.panel = gladevcp.makepins.GladePanel(self.halcomp, xmlname, self.builder, None)
+    self.halcomp.ready()
+    # since the main loop is needed to handle the UI and its events, blocking calls like sleep()
+    # will block the UI as well, so everything goes through event handlers (aka callbacks)
+    # The gobject.timeout_add() function sets a function to be called at regular intervals
+    # the time between calls to the function, in milliseconds
+    gobject.timeout_add(100, self.periodic) # time between calls to the function, in milliseconds
+    self.machine_status = 0
+
+  def periodic(self): # fetch status items and update screen
+
+    # poll the error channel
+    self.error_status = self.error_channel.poll()
+    if self.error_status:
+      self.error_kind, self.error_text = self.error_status
+      if self.error_kind in (linuxcnc.NML_ERROR, linuxcnc.OPERATOR_ERROR):
+        self.error_type = "Error "
+      else:
+        self.error_type = "Info "
+      self.message_id = self.statusbar.push(0, self.error_type + self.error_text)
+
+    # poll the status channel
+    self.status.poll()
+    data = self.status.actual_position[0]
+    text = "% 9.4f"% (data)
+    self.builder.get_object("dro_x").set_text(text)
+
+    data = self.status.actual_position[1]
+    text = "% 9.4f"% (data)
+    self.builder.get_object("dro_y").set_text(text)
+
+    data = self.status.actual_position[2]
+    text = "% 9.4f"% (data)
+    self.builder.get_object("dro_z").set_text(text)
+
+    return True # must return True to keep running
+
+  def on_hal_stat1_mode_mdi(self, widget, data=None):
+    self.mode_mdi = 1
+
+  def homing_ok(self, axis):
+    self.status.poll()
+    if self.status.axis[axis]['homed'] == 0 and not self.status.estop and self.status.enabled:
+      return True
+    else:
+      return False
+
+
+  ## FILTERS ##
+  # gas
+  def on_filtergastop_clicked(self, widget, data=None):
+    self.command.program_open("/home/pi/Desktop/gluerobot/filters/gastop.ngc") 
+
+  def on_filtergasbottom_clicked(self, widget, data=None):
+    self.command.program_open("/home/pi/Desktop/gluerobot/filters/gasbottom.ngc") 
+
+  # Hicap
+  def on_filterhicaptop_clicked(self, widget, data=None):
+    self.command.program_open("/home/pi/Desktop/gluerobot/filters/hicaptop.ngc") 
+
+  def on_filterhicapbottom_clicked(self, widget, data=None):
+    self.command.program_open("/home/pi/Desktop/gluerobot/filters/hicapbottom.ngc")
+
+  # Small
+  def on_filtercs_clicked(self, widget, data=None):
+    self.command.program_open("/home/pi/Desktop/gluerobot/filters/cs.ngc") 
+
+  def on_filtertrinity_clicked(self, widget, data=None):
+    self.command.program_open("/home/pi/Desktop/gluerobot/filters/trinity.ngc")
+
+  # Test
+  def on_filtertest1_clicked(self, widget, data=None):
+    self.command.program_open("/home/pi/Desktop/gluerobot/filters/test1.ngc") 
+
+  def on_filtertest2_clicked(self, widget, data=None):
+    self.command.program_open("/home/pi/Desktop/gluerobot/filters/test2.ngc")
+
+
+
+
+  # WINDOW
+  def on_window1_destroy(self, widget, data=None):
+    print "quit with cancel"
+    gtk.main_quit()
+
+  def on_gtk_quit_activate(self, menuitem, data=None):
+    print "quit from menu"
+    gtk.main_quit()
+
+
+  # JOGGING
+  def on_jog_x_plus_pressed(self, widget, data=None):
+    self.command.mode(self.emc.MODE_MANUAL)
+    self.command.jog(self.emc.JOG_CONTINUOUS, 1, 0, 9000/60)
+    
+  def on_jog_x_plus_released(self, widget, data=None):
+    self.command.mode(self.emc.MODE_MANUAL)
+    self.command.jog(self.emc.JOG_STOP, 1, 0)
+
+  def on_jog_x_minus_pressed(self, widget, data=None):
+    self.command.mode(self.emc.MODE_MANUAL)
+    self.command.jog(self.emc.JOG_CONTINUOUS, 1, 0, -9000/60)
+
+  def on_jog_x_minus_released(self, widget, data=None):
+    self.command.mode(self.emc.MODE_MANUAL)
+    self.command.jog(self.emc.JOG_STOP, 1, 0)
+
+  def on_jog_y_plus_pressed(self, widget, data=None):
+    self.command.mode(self.emc.MODE_MANUAL)
+    self.command.jog(self.emc.JOG_CONTINUOUS, 1, 1, 9000/60)
+
+  def on_jog_y_plus_released(self, widget, data=None):
+    self.command.mode(self.emc.MODE_MANUAL)
+    self.command.jog(self.emc.JOG_STOP, 1, 1)
+
+  def on_jog_y_minus_pressed(self, widget, data=None):
+    self.command.mode(self.emc.MODE_MANUAL)
+    self.command.jog(self.emc.JOG_CONTINUOUS, 1, 1, -9000/60)
+
+  def on_jog_y_minus_released(self, widget, data=None):
+    self.command.mode(self.emc.MODE_MANUAL)
+    self.command.jog(self.emc.JOG_STOP, 1, 1)
+
+
+  # GLUE
+  # purge
+  def on_purge_pressed(self, widget, data=None):
+    self.command.mist(self.emc.MIST_ON)
+
+  def on_purge_released(self, widget, data=None):
+    self.command.mist(self.emc.MIST_OFF)
+
+if __name__ == "__main__":
+  app = CleanspaceGluebot()
+  gtk.main()
