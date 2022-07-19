@@ -1,18 +1,23 @@
 G21 G17 G90
 
-(Starting position)
+(Starting position: top left)
 G01 X67 Y19 F9000
 
 G91
 
+(Glue on)
 M07
 
+(To bottom left)
 G01 Y128 F2000
+(To bottom right)
 G01 X-48 F2000
-
+(To top right)
 G01 Y-124 F2000
+(To top left)
 G01 X46 F2000
 
+(Glue off)
 M09
 
 M02
