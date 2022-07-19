@@ -1,22 +1,32 @@
 G21 G17 G90
 
-(Starting position)
+(Move to starting position)
 G01 X62.5 Y36 F9000
 
+(Switch to relative movement)
 G91
 
+(Turn glue on)
 M07
 
+(Travel to bottom left corner)
 G01 Y76 F3500
 
+(Turn glue off)
 M09
+(Move 3 mm along X without glue)
 G01 X-3 F2000
-M07
-G01 X-37 F3500
 
+(Turn glue on)
+M07
+
+(Travel to each remaining corner)
+G01 X-37 F3500
 G01 Y-70 F3500
 G01 X37 F3500
 
+(Turn glue off)
 M09
 
+(End program)
 M02
